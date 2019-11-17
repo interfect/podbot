@@ -27,7 +27,7 @@ class PodBot:
     Represents a bot instance which logs into Matrix, hangs out in a room, and obeys commands.
     """
 
-    def __init__(self, HOMESERVER, USER, PASSWORD, ROOM, PROTOCOL="https"):
+    def __init__(self, homeserver, user, password, room, protocol="https"):
         """
         Start up a bot and connect to the given homeserver with the given
         credentials, and join the given room.
@@ -37,14 +37,14 @@ class PodBot:
         self.replaying = True
         
         # Save our important config items
-        self.ROOM = ROOM
-        self.PASSWORD = PASSWORD
+        self.room = room
+        self.password = password
         
         # This holds our media player
         self.player = None
         
         # This holds our Matrix connection
-        self.client = AsyncClient(PROTOCOL + "://" + HOMESERVER, USER)
+        self.client = AsyncClient(protocol + "://" + homeserver, user)
         self.client.add_event_callback(self.message_cb, RoomMessageText)
         self.client.add_event_callback(self.invite_cb, InviteEvent)
         
@@ -58,7 +58,7 @@ class PodBot:
         actually do its work.
         """
         
-        result = await self.client.login(self.PASSWORD)
+        result = await self.client.login(self.password)
         print('Login result: {}'.format(str(result)))
         
         await self.client.sync_forever(timeout=30000)
@@ -68,7 +68,7 @@ class PodBot:
         Handle a message we see in a room somewhere.
         """
         
-        if room.machine_name == self.ROOM or room.display_name == self.ROOM:
+        if room.machine_name == self.room or room.display_name == self.room:
             # We like this room
             print("{} | {}: {}".format(room.display_name, room.user_name(event.sender), event.body))
             
@@ -90,10 +90,10 @@ class PodBot:
         
         print("Room: {} Event: {}".format(repr(room), repr(event)))
         
-        if room.machine_name == self.ROOM or room.display_name == self.ROOM:
+        if room.machine_name == self.room or room.display_name == self.room:
             # We want to be in this room, so join
-            result = await self.client.join(ROOM)
-            print('Attempted to accept invite to {}: {}'.format(self.ROOM, str(result)))
+            result = await self.client.join(room)
+            print('Attempted to accept invite to {}: {}'.format(self.room, str(result)))
         else:
             # Reject the invite
             result = await self.client.room_leave(room.machine_name)
@@ -124,17 +124,17 @@ class PodBot:
         
         for room_id in self.client.rooms.keys():
             # Decide if we should be in this room
-            if room_id != self.ROOM:
+            if room_id != self.room:
                 # Nope. Leave it.
                 result = await self.client.room_leave(room_id)
                 
                 print('Attempted to leave {}: {}'.format(room_id, str(result)))
                 
-        if self.ROOM not in self.client.rooms:
+        if self.room not in self.client.rooms:
             # We need to join the room we want to be in
-            result = await self.client.join(self.ROOM)
+            result = await self.client.join(self.room)
             
-            print('Attempted to join {}: {}'.format(self.ROOM, str(result)))
+            print('Attempted to join {}: {}'.format(self.room, str(result)))
             
             
     async def run_command(self, command):
@@ -217,7 +217,7 @@ async def main():
         protocol = config[homeserver].get('protocol', 'https')
         
         # Make a bot that will connect with those credentials
-        bots.append(PodBot(HOMESERVER, USER, PASSWORD, ROOM, PROTOCOL="https"))
+        bots.append(PodBot(homeserver, user, password, room, protocol="https"))
         
     # Start all the bots
     results = [bot.run() for bot in bots]
