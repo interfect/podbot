@@ -143,6 +143,14 @@ class PodBot:
             # Stop media
             print("Stop media")
             self.update_media()
+        elif command.lower() == "pause":
+            # Pause media
+            print("Pause media")
+            self.set_media_playing(False)
+        elif command.lower() == "play":
+            # Resume media
+            print("Resume media")
+            self.set_media_playing(True)
         else:
             # See if it is something to start
             # Matches blah URL or blah URL [hh:mm:ss]
@@ -196,6 +204,15 @@ class PodBot:
             self.player = vlc.MediaPlayer(parts[0])
             self.player.play()
             self.player.set_time(1000 * time)
+            
+    def set_media_playing(self, playing):
+        """
+        Pause media if false, make it play again if true.
+        """
+        
+        if self.player is not None:
+            print("Resume" if playing else "Pause")
+            self.player.set_pause(0 if playing else 1)
 
 async def main():
     """

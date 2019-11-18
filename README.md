@@ -1,6 +1,6 @@
 # PodBot: A bot to play your podcasts
 
-PodBot is a Matrix bot designed to listen for the messages that AntennaPod creates if you share a podcast episode URL with a timestamp in a Matrix channel.
+PodBot is a [Matrix](https://matrix.org/) bot designed to listen for the messages that [AntennaPod](https://antennapod.org/) creates if you share a podcast episode URL with a timestamp in a Matrix channel via the [Riot.im app](https://about.riot.im/downloads).
 
 You can set up the bot to sit in a Matrix room, and then send podcast episodes to it from your phone. This lets you send a podcast you were listening to on your phone to better speakers in your house without losing your place.
 
@@ -46,4 +46,4 @@ cp podbot.conf.example podbot.conf
 * Select the room with you and the bot as the destination room.
 * Hit send on the pre-filled message to start it playing.
 
-To **stop** the playing audio, send the one-word message `stop`.
+To **stop** the playing audio, send the one-word message `stop`. There are also **pause** and **play** commands to pause and resume the media.
