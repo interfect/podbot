@@ -22,6 +22,25 @@ import configparser
 from nio import (AsyncClient, RoomMessageText, InviteEvent)
 import vlc
 
+def seconds_to_timestamp(seconds):
+    """
+    Return string HH:MM:SS.SS from a float number of seconds.
+    """
+    
+    (hours, seconds) = divmod(seconds, 60 * 60)
+    (minutes, seconds) = divmod(seconds, 60)
+    
+    return '{:02d}:{:02d}:{:02.2f}'.format(int(hours), int(minutes), seconds)
+    
+def timestamp_to_seconds(timestamp):
+    """
+    Parse a string HH:MM:SS[.SS] to a number of seconds.
+    """
+    
+    time_parts = [float(x) for x in parts[1].split(':')]
+    seconds = 60 * 60 * time_parts[0] + 60 * time_parts[1] + time_parts[2]
+    return seconds
+
 class PodBot:
     """
     Represents a bot instance which logs into Matrix, hangs out in a room, and obeys commands.
@@ -73,10 +92,12 @@ class PodBot:
             print("{} | {}: {}".format(room.display_name, room.user_name(event.sender), event.body))
             
             if not self.replaying:
-                # This came in since we started running
-                # Try handling the message as a command
-                await self.run_command(event.body)
-            
+                # This came in since we started running.
+                # Try handling the message as a command.
+                result = await self.run_command(event.body)
+                if result is not None:
+                    # If it returns anything, send that back as a message.
+                    await self.client.room_send(room.machine_name, 'm.room.message', {'msgtype': 'm.text', 'body': result})
         else:
             # Ignore messages in other rooms
             return
@@ -88,7 +109,7 @@ class PodBot:
         Handle an invite to a room.
         """
         
-        print("Room: {} Event: {}".format(repr(room), repr(event)))
+        print('Room: {} Event: {}'.format(repr(room), repr(event)))
         
         if room.machine_name == self.room or room.display_name == self.room:
             # We want to be in this room, so join
@@ -116,7 +137,7 @@ class PodBot:
         Handle the periodic "synced" event that we get when we come up to speed with the server.
         """
         
-        print("Client is synced!")
+        print('Client is synced!')
         print('Rooms:' + str(self.client.rooms))
         
         # Now we can run commands
@@ -138,31 +159,55 @@ class PodBot:
             
             
     async def run_command(self, command):
-        print("Try command: {}".format(repr(command)))
-        if command.lower() == "stop":
+        """
+        Execute the given command.
+        
+        Returns a response string, or None.
+        """
+        
+        print('Try command: {}'.format(repr(command)))
+        if command.lower() == 'stop':
             # Stop media
-            print("Stop media")
+            print('Stop media')
+            stopped_at = self.get_media_position()
             self.update_media()
-        elif command.lower() == "pause":
+            
+            if stopped_at is not None:
+                # Report where we stopped
+                return 'Stopped at {}'.format(stopped_at)
+            else:
+                return 'Stopped'
+            
+        elif command.lower() == 'pause':
             # Pause media
-            print("Pause media")
+            print('Pause media')
             self.set_media_playing(False)
-        elif command.lower() == "play":
+            
+            paused_at = self.get_media_position()
+            if paused_at is not None:
+                # Report where we stopped
+                return 'Paused at {}'.format(paused_at)
+            else:
+                return 'Paused'
+            
+        elif command.lower() == 'play':
             # Resume media
-            print("Resume media")
+            print('Resume media')
             self.set_media_playing(True)
+            return 'Resuming'
         else:
             # See if it is something to start
             # Matches blah URL or blah URL [hh:mm:ss]
             match = re.match('.*(https?://[^ ]*) ?\[?([0-9:]+)?\]?.*', command)
             
             if match:
-                print("Play media: {}".format(match.groups()))
+                print('Play media: {}'.format(match.groups()))
                 self.update_media(match.groups())
+                return 'Playing'
                 
     def update_media(self, parts=None):
         """
-        Play media given a tuple of parts.
+        Play media given a tuple of parts. Parts that are None are ignored.
         
         0 parts: stop
         1 part (url): play URL from beginning
@@ -170,37 +215,40 @@ class PodBot:
         
         """
         
+        if parts is not None:
+            # Drop any Nones
+            parts = [x for x in parts if x is not None]
+        
         if parts is None or len(parts) == 0:
             if self.player is not None:
                 # Stop the player
-                print("Stop playing anything")
+                print('Stop playing anything')
                 self.player.stop()
                 player = None
         elif len(parts) == 1:
             # Play the URL
             if self.player is not None:
                 # Stop any existing player
-                print("Stop old player")
+                print('Stop old player')
                 self.player.stop()
-            print("Play {} from start".format(parts[0]))
+            print('Play {} from start'.format(parts[0]))
             self.player = vlc.MediaPlayer(parts[0])
             self.player.play()
         elif len(parts) == 2:
             # Play the URL from the given time, if we can parse the time
             try:
-                time_parts = [int(x) for x in parts[1].split(':')]
-                time = 60 * 60 * time_parts[0] + 60 * time_parts[1] + time_parts[2]
+                time = timestamp_to_seconds(parts[1])
             except:
                 # Skip unparseable time
-                print("Could not parse time {}".format(parts[1]))
+                print('Could not parse time {}'.format(parts[1]))
                 return
             
             if self.player is not None:
                 # Stop any existing player
-                print("Stop old player")
+                print('Stop old player')
                 self.player.stop()
                 
-            print("Play {} from {} seconds".format(parts[0], time))
+            print('Play {} from {} seconds'.format(parts[0], time))
             self.player = vlc.MediaPlayer(parts[0])
             self.player.play()
             self.player.set_time(1000 * time)
@@ -211,8 +259,28 @@ class PodBot:
         """
         
         if self.player is not None:
-            print("Resume" if playing else "Pause")
+            print('Resume' if playing else 'Pause')
             self.player.set_pause(0 if playing else 1)
+            
+    def get_media_position(self):
+        """
+        Return a string timestamp in whatever we are playing, if we paused or stopped.
+        
+        If nothing is paused or nothing has been played, return None.
+        """
+        
+        if self.player is None:
+            return None
+            
+        # Work out where we are in seconds
+        seconds = self.player.get_time() / 1000
+        
+        # And report as a timestamp
+        return seconds_to_timestamp(seconds)
+        
+        
+        
+        
 
 async def main():
     """
